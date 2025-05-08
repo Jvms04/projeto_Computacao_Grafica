@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratório de Computação Gráfica</title>
+    <style>
+        :root {
+            --primary: #6e48aa;
+            --secondary: #9d50bb;
+            --accent: #4776E6;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--dark), #16213e);
+            color: var(--light);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        
+        header {
+            text-align: center;
+            padding: 3rem 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 20px rgba(110, 72, 170, 0.3);
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .project-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .project-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .project-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, 
+                      rgba(110, 72, 170, 0.3), 
+                      rgba(157, 80, 187, 0.1));
+            z-index: -1;
+        }
+        
+        .project-image {
+            height: 180px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        
+        .project-image::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(26, 26, 46, 0.9), transparent);
+        }
+        
+        .project-info {
+            padding: 1.5rem;
+        }
+        
+        .project-number {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            position: relative;
+            display: inline-block;
+            padding: 0;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 10px rgba(110, 72, 170, 0.3);
+        }
+        
+        .project-number::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 50%;
+            z-index: -1;
+            opacity: 0.3;
+        }
+        
+        .project-number::after {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .project-title {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .project-description {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+        
+        .project-link {
+            display: inline-block;
+            padding: 0.6rem 1.2rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .project-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(110, 72, 170, 0.4);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+        
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px rgba(110, 72, 170, 0.5);
+            }
+            to {
+                text-shadow: 0 0 20px rgba(110, 72, 170, 0.8), 0 0 30px rgba(157, 80, 187, 0.6);
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: translateY(-50%) scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: translateY(-50%) scale(1.3);
+                opacity: 0.4;
+            }
+            100% {
+                transform: translateY(-50%) scale(1);
+                opacity: 0.8;
+            }
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .project-card:nth-child(odd) {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .project-card:nth-child(even) {
+            animation: float 6s ease-in-out infinite reverse;
+        }
+        
+        .project-card:hover .project-number::after {
+            animation: pulse 0.5s infinite;
+            background: var(--light);
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .projects-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .project-number::before,
+            .project-number::after {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles-js"></div>
+    
+    <header>
+        <h1>Laboratório de Computação Gráfica</h1>
+        <p class="subtitle">Explore projetos interativos que demonstram os principais conceitos de computação gráfica, realidade virtual e simulações físicas em três dimensões.</p>
+    </header>
+    
+    <main>
+        <div class="projects-grid">
+            <!-- Projeto 1 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/RNRdqJDd/Chat-GPT-Image-8-de-mai-de-2025-16-10-26.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 1</span>
+                    <h3 class="project-title">Transformações 3D</h3>
+                    <p class="project-description">Manipule objetos tridimensionais com transformações geométricas em tempo real. Explore rotação, translação e escala.</p>
+                    <a href="projeto1_transformacoes3D.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 2 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/0y7fXFcv/Chat-GPT-Image-8-de-mai-de-2025-16-17-04.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 2</span>
+                    <h3 class="project-title">Materiais e Iluminação</h3>
+                    <p class="project-description">Explore como diferentes materiais interagem com vários tipos de luzes em uma galeria 3D interativa.</p>
+                    <a href="projeto2_materiais_iluminacao.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 3 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/XNKSCjRK/Chat-GPT-Image-8-de-mai-de-2025-16-24-08.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 3</span>
+                    <h3 class="project-title">Câmeras e Projeções</h3>
+                    <p class="project-description">Experimente com diferentes tipos de câmeras e projeções em uma cena 3D, incluindo perspectiva e ortográfica.</p>
+                    <a href="projeto3_cameras_projecoes.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 4 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/QdGTnq4Z/Chat-GPT-Image-8-de-mai-de-2025-16-24-54.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 4</span>
+                    <h3 class="project-title">Sistema Solar</h3>
+                    <p class="project-description">Simulação animada do sistema solar com planetas orbitando o Sol em diferentes velocidades e rotações.</p>
+                    <a href="projeto4_sistema_solar.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 5 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/dtZbYgdX/Chat-GPT-Image-8-de-mai-de-2025-16-47-29.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 5</span>
+                    <h3 class="project-title">Pipeline Gráfico</h3>
+                    <p class="project-description">Visualize as etapas do pipeline gráfico com shaders personalizados para vértices e fragmentos.</p>
+                    <a href="projeto5_pipeline_grafico.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 6 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/J0j6vCHC/image.jpg');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 6</span>
+                    <h3 class="project-title">Curvas Paramétricas</h3>
+                    <p class="project-description">Explore curvas de Bézier e Catmull-Rom com um objeto que segue a trajetória e mostra o frame de Frenet.</p>
+                    <a href="projeto6_curvas_parametricas.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 7 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/4Nsv19P3/image-1.jpg');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 7</span>
+                    <h3 class="project-title">Galeria Clicável</h3>
+                    <p class="project-description">Interaja com objetos 3D usando raycasting para seleção e manipulação em tempo real.</p>
+                    <a href="projeto7_galeria_clicavel.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 8 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/Y0ZZKSj0/Chat-GPT-Image-8-de-mai-de-2025-16-33-15.png');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 8</span>
+                    <h3 class="project-title">Funções Matemáticas</h3>
+                    <p class="project-description">Visualize superfícies 3D geradas por funções matemáticas com diferentes esquemas de cores.</p>
+                    <a href="projeto8_funcoes_matematicas.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 9 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/C1k4Jy2y/image-2.jpg');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 9</span>
+                    <h3 class="project-title">Texturas e UV Mapping</h3>
+                    <p class="project-description">Experimente com diferentes técnicas de texturização, incluindo bump maps e normal maps.</p>
+                    <a href="projeto9_laboratorio_texturas.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+            
+            <!-- Projeto 10 -->
+            <div class="project-card">
+                <div class="project-image" style="background-image: url('https://i.postimg.cc/W1JLjzF0/image-3.jpg');"></div>
+                <div class="project-info">
+                    <span class="project-number">Projeto 10</span>
+                    <h3 class="project-title">Simulação Física</h3>
+                    <p class="project-description">Observe esferas caindo e colidindo com física realista, controlando gravidade e elasticidade.</p>
+                    <a href="projeto10_simulacao_fisica.html" class="project-link">Abrir Projeto</a>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>Laboratório de Computação Gráfica &copy; 2025 | Todos os projetos desenvolvidos com Three.js</p>
+    </footer>
+
+    <!-- Biblioteca de partículas para efeito de fundo -->
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script>
+        // Configuração do efeito de partículas
+        document.addEventListener('DOMContentLoaded', function() {
+            particlesJS('particles-js', {
+                "particles": {
+                    "number": {
+                        "value": 80,
+                        "density": {
+                            "enable": true,
+                            "value_area": 800
+                        }
+                    },
+                    "color": {
+                        "value": ["#6e48aa", "#9d50bb", "#4776E6"]
+                    },
+                    "shape": {
+                        "type": "circle",
+                        "stroke": {
+                            "width": 0,
+                            "color": "#000000"
+                        },
+                        "polygon": {
+                            "nb_sides": 5
+                        }
+                    },
+                    "opacity": {
+                        "value": 0.5,
+                        "random": true,
+                        "anim": {
+                            "enable": true,
+                            "speed": 1,
+                            "opacity_min": 0.1,
+                            "sync": false
+                        }
+                    },
+                    "size": {
+                        "value": 3,
+                        "random": true,
+                        "anim": {
+                            "enable": true,
+                            "speed": 2,
+                            "size_min": 0.1,
+                            "sync": false
+                        }
+                    },
+                    "line_linked": {
+                        "enable": true,
+                        "distance": 150,
+                        "color": "#6e48aa",
+                        "opacity": 0.3,
+                        "width": 1
+                    },
+                    "move": {
+                        "enable": true,
+                        "speed": 1,
+                        "direction": "none",
+                        "random": true,
+                        "straight": false,
+                        "out_mode": "out",
+                        "bounce": false,
+                        "attract": {
+                            "enable": true,
+                            "rotateX": 600,
+                            "rotateY": 1200
+                        }
+                    }
+                },
+                "interactivity": {
+                    "detect_on": "canvas",
+                    "events": {
+                        "onhover": {
+                            "enable": true,
+                            "mode": "grab"
+                        },
+                        "onclick": {
+                            "enable": true,
+                            "mode": "push"
+                        },
+                        "resize": true
+                    },
+                    "modes": {
+                        "grab": {
+                            "distance": 140,
+                            "line_linked": {
+                                "opacity": 0.8
+                            }
+                        },
+                        "bubble": {
+                            "distance": 400,
+                            "size": 40,
+                            "duration": 2,
+                            "opacity": 8,
+                            "speed": 3
+                        },
+                        "repulse": {
+                            "distance": 200,
+                            "duration": 0.4
+                        },
+                        "push": {
+                            "particles_nb": 4
+                        },
+                        "remove": {
+                            "particles_nb": 2
+                        }
+                    }
+                },
+                "retina_detect": true
+            });
+            
+            // Efeito de digitação no título
+            const title = document.querySelector('h1');
+            const originalText = title.textContent;
+            title.textContent = '';
+            
+            let i = 0;
+            const typingEffect = setInterval(() => {
+                if (i < originalText.length) {
+                    title.textContent += originalText.charAt(i);
+                    i++;
+                } else {
+                    clearInterval(typingEffect);
+                }
+            }, 100);
+            
+            // Efeito de aparecimento suave para os cards
+            const cards = document.querySelectorAll('.project-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = `all 0.5s ease ${index * 0.1}s`;
+                
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 500 + (index * 100));
+            });
+        });
+    </script>
+</body>
+</html>

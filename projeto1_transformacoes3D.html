@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 1 - Transformações 3D</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        select, button, input {
+            margin: 5px 0;
+        }
+        .transform-controls {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Transformações 3D</h2>
+        <select id="objectSelector">
+            <option value="cube">Cubo</option>
+            <option value="sphere">Esfera</option>
+            <option value="cylinder">Cilindro</option>
+        </select>
+
+        <div class="transform-controls">
+            <h3>Translação</h3>
+            <label>X: <input type="range" id="translateX" min="-5" max="5" step="0.1" value="0"></label><br>
+            <label>Y: <input type="range" id="translateY" min="-5" max="5" step="0.1" value="0"></label><br>
+            <label>Z: <input type="range" id="translateZ" min="-5" max="5" step="0.1" value="0"></label>
+        </div>
+
+        <div class="transform-controls">
+            <h3>Rotação</h3>
+            <label>X: <input type="range" id="rotateX" min="0" max="6.28" step="0.01" value="0"></label><br>
+            <label>Y: <input type="range" id="rotateY" min="0" max="6.28" step="0.01" value="0"></label><br>
+            <label>Z: <input type="range" id="rotateZ" min="0" max="6.28" step="0.01" value="0"></label>
+        </div>
+
+        <div class="transform-controls">
+            <h3>Escala</h3>
+            <label>X: <input type="range" id="scaleX" min="0.1" max="3" step="0.1" value="1"></label><br>
+            <label>Y: <input type="range" id="scaleY" min="0.1" max="3" step="0.1" value="1"></label><br>
+            <label>Z: <input type="range" id="scaleZ" min="0.1" max="3" step="0.1" value="1"></label>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Cena, câmera e renderizador
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Objetos
+        const cube = new THREE.Mesh(
+            new THREE.BoxGeometry(),
+            new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
+        );
+        cube.name = "cube";
+
+        const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true })
+        );
+        sphere.name = "sphere";
+        sphere.position.x = 2;
+
+        const cylinder = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 1, 16),
+            new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true })
+        );
+        cylinder.name = "cylinder";
+        cylinder.position.x = -2;
+
+        scene.add(cube, sphere, cylinder);
+
+        // Eixos de coordenadas para cada objeto
+        const addAxes = (obj) => {
+            const axes = new THREE.AxesHelper(1);
+            obj.add(axes);
+        };
+        addAxes(cube);
+        addAxes(sphere);
+        addAxes(cylinder);
+
+        // Posição da câmera
+        camera.position.z = 5;
+
+        // Controles
+        const objectSelector = document.getElementById('objectSelector');
+        const translateX = document.getElementById('translateX');
+        const translateY = document.getElementById('translateY');
+        const translateZ = document.getElementById('translateZ');
+        const rotateX = document.getElementById('rotateX');
+        const rotateY = document.getElementById('rotateY');
+        const rotateZ = document.getElementById('rotateZ');
+        const scaleX = document.getElementById('scaleX');
+        const scaleY = document.getElementById('scaleY');
+        const scaleZ = document.getElementById('scaleZ');
+
+        let selectedObject = cube;
+
+        objectSelector.addEventListener('change', (e) => {
+            selectedObject = scene.getObjectByName(e.target.value);
+        });
+
+        // Atualiza transformações
+        const updateTransformations = () => {
+            selectedObject.position.set(
+                parseFloat(translateX.value),
+                parseFloat(translateY.value),
+                parseFloat(translateZ.value)
+            );
+
+            selectedObject.rotation.set(
+                parseFloat(rotateX.value),
+                parseFloat(rotateY.value),
+                parseFloat(rotateZ.value)
+            );
+
+            selectedObject.scale.set(
+                parseFloat(scaleX.value),
+                parseFloat(scaleY.value),
+                parseFloat(scaleZ.value)
+            );
+        };
+
+        // Event listeners para os controles
+        [translateX, translateY, translateZ, rotateX, rotateY, rotateZ, scaleX, scaleY, scaleZ].forEach(control => {
+            control.addEventListener('input', updateTransformations);
+        });
+
+        // Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Redimensionamento
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

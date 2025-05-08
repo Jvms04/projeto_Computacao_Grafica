@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 9 - Laboratório de Texturas</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        select, button {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+        }
+        #texture-info {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .texture-preview {
+            width: 100%;
+            height: 100px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            margin: 10px 0;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Laboratório de Texturas</h2>
+        
+        <div class="control-group">
+            <label>Objeto:
+                <select id="object-type">
+                    <option value="sphere">Esfera</option>
+                    <option value="box">Caixa</option>
+                    <option value="torus">Torus</option>
+                    <option value="cylinder">Cilindro</option>
+                    <option value="plane">Plano</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label>Tipo de Textura:
+                <select id="texture-type">
+                    <option value="uv">Mapeamento UV Tradicional</option>
+                    <option value="checker">Textura Procedural (Xadrez)</option>
+                    <option value="brick">Textura Procedural (Tijolos)</option>
+                    <option value="noise">Textura de Ruído</option>
+                    <option value="bump">Bump Map</option>
+                    <option value="normal">Normal Map</option>
+                    <option value="displacement">Displacement Map</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label>Intensidade do Efeito:
+                <input type="range" id="effect-intensity" min="0" max="2" step="0.1" value="1">
+            </label>
+        </div>
+
+        <div id="texture-info">
+            <div class="texture-preview" id="texture-preview"></div>
+            <p id="texture-description">Selecione um tipo de textura para ver informações</p>
+        </div>
+
+        <button id="toggle-rotation">Pausar Rotação</button>
+        <button id="toggle-wireframe">Mostrar Wireframe</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // 1. Configuração inicial
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Controles de câmera
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 3. Iluminação
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight2.position.set(-1, -1, -1);
+        scene.add(directionalLight2);
+
+        // 4. Variáveis globais
+        let currentObject = null;
+        let isRotating = true;
+        let showWireframe = false;
+        let effectIntensity = 1;
+
+        // 5. Texturas e descrições
+        const textureDescriptions = {
+            uv: "Mapeamento UV tradicional usando coordenadas de textura padrão do objeto.",
+            checker: "Textura procedural de xadrez gerada matematicamente.",
+            brick: "Textura procedural de tijolos simulando padrão de alvenaria.",
+            noise: "Textura baseada em ruído Perlin para efeitos orgânicos.",
+            bump: "Bump map simula detalhes de superfície sem alterar a geometria.",
+            normal: "Normal map altera as normais para simular detalhes complexos.",
+            displacement: "Displacement map realmente modifica a geometria do objeto."
+        };
+
+        const texturePreviews = {
+            uv: "linear-gradient(45deg, #f00 25%, #0f0 25%, #0f0 50%, #00f 50%, #00f 75%, #ff0 75%)",
+            checker: "repeating-conic-gradient(#000 0% 25%, #fff 0% 50%) 50% / 20px 20px",
+            brick: `repeating-linear-gradient(0deg, #b22222, #b22222 20px, #8b0000 20px, #8b0000 22px, 
+                   #b22222 22px, #b22222 44px, #8b0000 44px, #8b0000 46px)`,
+            noise: "linear-gradient(45deg, #888 25%, #aaa 25%, #aaa 50%, #888 50%, #888 75%, #aaa 75%)",
+            bump: "linear-gradient(135deg, #777 0%, #fff 50%, #777 100%)",
+            normal: "linear-gradient(135deg, #7f7fff 0%, #ff7f7f 50%, #7fff7f 100%)",
+            displacement: "radial-gradient(circle, #000 0%, #fff 100%)"
+        };
+
+        // 6. Criar texturas
+        function createTexture(type) {
+            const size = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            switch(type) {
+                case 'checker':
+                    const tileSize = size / 8;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, size, size);
+                    ctx.fillStyle = '#000000';
+                    for (let y = 0; y < 8; y++) {
+                        for (let x = 0; x < 8; x++) {
+                            if ((x + y) % 2 === 0) {
+                                ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                            }
+                        }
+                    }
+                    break;
+
+                case 'brick':
+                    ctx.fillStyle = '#b22222';
+                    ctx.fillRect(0, 0, size, size);
+                    
+                    const brickWidth = size / 4;
+                    const brickHeight = size / 8;
+                    const mortar = 4;
+                    
+                    ctx.fillStyle = '#8b0000';
+                    for (let y = 0; y < 8; y++) {
+                        const offset = (y % 2) * (brickWidth / 2);
+                        for (let x = 0; x < 4; x++) {
+                            ctx.fillRect(
+                                offset + x * brickWidth + mortar/2, 
+                                y * brickHeight + mortar/2, 
+                                brickWidth - mortar, 
+                                brickHeight - mortar
+                            );
+                        }
+                    }
+                    break;
+
+                case 'noise':
+                    const imageData = ctx.createImageData(size, size);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < data.length; i += 4) {
+                        const value = Math.floor(Math.random() * 255);
+                        data[i] = value;     // R
+                        data[i + 1] = value; // G
+                        data[i + 2] = value; // B
+                        data[i + 3] = 255;   // A
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                    break;
+
+                case 'bump':
+                    const gradient = ctx.createLinearGradient(0, 0, size, size);
+                    gradient.addColorStop(0, '#777');
+                    gradient.addColorStop(0.5, '#fff');
+                    gradient.addColorStop(1, '#777');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, size, size);
+                    break;
+
+                case 'normal':
+                    const normalGradient = ctx.createLinearGradient(0, 0, size, size);
+                    normalGradient.addColorStop(0, '#7f7fff');
+                    normalGradient.addColorStop(0.5, '#ff7f7f');
+                    normalGradient.addColorStop(1, '#7fff7f');
+                    ctx.fillStyle = normalGradient;
+                    ctx.fillRect(0, 0, size, size);
+                    break;
+
+                case 'displacement':
+                    const centerX = size / 2;
+                    const centerY = size / 2;
+                    const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+                    
+                    for (let y = 0; y < size; y++) {
+                        for (let x = 0; x < size; x++) {
+                            const dx = x - centerX;
+                            const dy = y - centerY;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            const value = 255 - Math.min(255, (distance / maxRadius) * 255);
+                            ctx.fillStyle = `rgb(${value}, ${value}, ${value})`;
+                            ctx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                    break;
+
+                default: // UV
+                    ctx.fillStyle = '#f00';
+                    ctx.fillRect(0, 0, size/2, size/2);
+                    ctx.fillStyle = '#0f0';
+                    ctx.fillRect(size/2, 0, size/2, size/2);
+                    ctx.fillStyle = '#00f';
+                    ctx.fillRect(0, size/2, size/2, size/2);
+                    ctx.fillStyle = '#ff0';
+                    ctx.fillRect(size/2, size/2, size/2, size/2);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        // 7. Criar materiais
+        function createMaterial(textureType, intensity) {
+            const texture = createTexture(textureType);
+            const bumpMap = textureType === 'bump' ? createTexture('bump') : null;
+            const normalMap = textureType === 'normal' ? createTexture('normal') : null;
+            const displacementMap = textureType === 'displacement' ? createTexture('displacement') : null;
+
+            return new THREE.MeshStandardMaterial({
+                map: ['uv', 'checker', 'brick', 'noise'].includes(textureType) ? texture : null,
+                bumpMap: bumpMap,
+                normalMap: normalMap,
+                displacementMap: displacementMap,
+                displacementScale: textureType === 'displacement' ? intensity * 0.5 : 0,
+                bumpScale: textureType === 'bump' ? intensity * 0.5 : 0,
+                normalScale: textureType === 'normal' ? new THREE.Vector2(intensity, intensity) : new THREE.Vector2(0, 0),
+                wireframe: showWireframe,
+                side: THREE.DoubleSide,
+                metalness: 0.2,
+                roughness: 0.7
+            });
+        }
+
+        // 8. Criar objetos
+        function createObject(objectType, textureType, intensity) {
+            // Remover objeto anterior se existir
+            if (currentObject) {
+                scene.remove(currentObject);
+            }
+
+            let geometry;
+            switch(objectType) {
+                case 'box':
+                    geometry = new THREE.BoxGeometry(5, 5, 5);
+                    break;
+                case 'torus':
+                    geometry = new THREE.TorusGeometry(3, 1, 16, 32);
+                    break;
+                case 'cylinder':
+                    geometry = new THREE.CylinderGeometry(3, 3, 5, 32);
+                    break;
+                case 'plane':
+                    geometry = new THREE.PlaneGeometry(10, 10);
+                    break;
+                default: // sphere
+                    geometry = new THREE.SphereGeometry(3, 32, 32);
+            }
+
+            const material = createMaterial(textureType, intensity);
+            currentObject = new THREE.Mesh(geometry, material);
+            scene.add(currentObject);
+
+            // Atualizar informações da textura
+            document.getElementById('texture-description').textContent = textureDescriptions[textureType];
+            document.getElementById('texture-preview').style.background = texturePreviews[textureType];
+        }
+
+        // 9. Event listeners
+        document.getElementById('object-type').addEventListener('change', () => {
+            createObject(
+                document.getElementById('object-type').value,
+                document.getElementById('texture-type').value,
+                parseFloat(document.getElementById('effect-intensity').value)
+            );
+        });
+
+        document.getElementById('texture-type').addEventListener('change', () => {
+            createObject(
+                document.getElementById('object-type').value,
+                document.getElementById('texture-type').value,
+                parseFloat(document.getElementById('effect-intensity').value)
+            );
+        });
+
+        document.getElementById('effect-intensity').addEventListener('input', () => {
+            createObject(
+                document.getElementById('object-type').value,
+                document.getElementById('texture-type').value,
+                parseFloat(document.getElementById('effect-intensity').value)
+            );
+        });
+
+        document.getElementById('toggle-rotation').addEventListener('click', () => {
+            isRotating = !isRotating;
+            document.getElementById('toggle-rotation').textContent = 
+                isRotating ? 'Pausar Rotação' : 'Retomar Rotação';
+        });
+
+        document.getElementById('toggle-wireframe').addEventListener('click', () => {
+            showWireframe = !showWireframe;
+            document.getElementById('toggle-wireframe').textContent = 
+                showWireframe ? 'Ocultar Wireframe' : 'Mostrar Wireframe';
+            if (currentObject) {
+                currentObject.material.wireframe = showWireframe;
+            }
+        });
+
+        // 10. Redimensionamento
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 11. Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isRotating && currentObject) {
+                currentObject.rotation.x += 0.005;
+                currentObject.rotation.y += 0.01;
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Iniciar
+        camera.position.set(0, 5, 15);
+        camera.lookAt(0, 0, 0);
+        createObject('sphere', 'uv', 1);
+        animate();
+    </script>
+</body>
+</html>

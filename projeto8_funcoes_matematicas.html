@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 8 - Visualização de Funções Matemáticas</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        select, input[type="range"] {
+            width: 100%;
+            padding: 5px;
+        }
+        button {
+            padding: 8px;
+            margin: 5px 0;
+            width: 100%;
+        }
+        #function-display {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Visualizador de Funções 3D</h2>
+        
+        <div class="control-group">
+            <label>Função Matemática:
+                <select id="function-select">
+                    <option value="sincos">sin(x) * cos(y)</option>
+                    <option value="wave">Onda Senoidal</option>
+                    <option value="paraboloid">Parabolóide</option>
+                    <option value="hyperbolic">Hiperbolóide</option>
+                    <option value="ripple">Ondulação</option>
+                    <option value="egg">Superfície Ovo</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="function-display">
+            z = sin(x) * cos(y)
+        </div>
+
+        <div class="control-group">
+            <label>Amplitude: <input type="range" id="amplitude" min="0.1" max="5" step="0.1" value="1"></label>
+            <label>Frequência: <input type="range" id="frequency" min="0.1" max="3" step="0.1" value="1"></label>
+            <label>Resolução: <input type="range" id="resolution" min="10" max="100" step="5" value="50"></label>
+        </div>
+
+        <div class="control-group">
+            <label>Esquema de Cores:
+                <select id="color-scheme">
+                    <option value="height">Por Altura</option>
+                    <option value="rainbow">Arco-íris</option>
+                    <option value="thermal">Térmico</option>
+                    <option value="grayscale">Escala de Cinza</option>
+                </select>
+            </label>
+        </div>
+
+        <button id="reset-view">Resetar Visualização</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // 1. Configuração inicial
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Controles de câmera
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 3. Iluminação
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight2.position.set(-1, -1, -1);
+        scene.add(directionalLight2);
+
+        // 4. Variáveis globais
+        let surfaceMesh;
+        const size = 20;
+        let resolution = 50;
+        let amplitude = 1;
+        let frequency = 1;
+
+        // 5. Funções matemáticas
+        const functions = {
+            sincos: (x, y) => Math.sin(x * frequency) * Math.cos(y * frequency),
+            wave: (x, y) => Math.sin(Math.sqrt(x*x + y*y) * frequency),
+            paraboloid: (x, y) => (x*x + y*y) * 0.1 * frequency,
+            hyperbolic: (x, y) => (x*x - y*y) * 0.1 * frequency,
+            ripple: (x, y) => Math.sin(x * frequency) + Math.cos(y * frequency),
+            egg: (x, y) => Math.sin(x * frequency) * Math.cos(y * frequency) * (2 + Math.sin(x * y * 0.2))
+        };
+
+        const functionNames = {
+            sincos: "sin(x) * cos(y)",
+            wave: "sin(√(x² + y²))",
+            paraboloid: "0.1(x² + y²)",
+            hyperbolic: "0.1(x² - y²)",
+            ripple: "sin(x) + cos(y)",
+            egg: "sin(x) * cos(y) * (2 + sin(x*y*0.2))"
+        };
+
+        // 6. Esquemas de cores
+        const colorSchemes = {
+            height: (z, minZ, maxZ) => {
+                const t = (z - minZ) / (maxZ - minZ);
+                return new THREE.Color(t, 0.5, 1 - t);
+            },
+            rainbow: (z, minZ, maxZ) => {
+                const t = (z - minZ) / (maxZ - minZ);
+                return new THREE.Color().setHSL(t, 1, 0.5);
+            },
+            thermal: (z, minZ, maxZ) => {
+                const t = (z - minZ) / (maxZ - minZ);
+                return new THREE.Color(t, 0, 1 - t);
+            },
+            grayscale: (z, minZ, maxZ) => {
+                const t = (z - minZ) / (maxZ - minZ);
+                return new THREE.Color(t, t, t);
+            }
+        };
+
+        // 7. Criar superfície
+        function createSurface() {
+            // Remover superfície anterior se existir
+            if (surfaceMesh) {
+                scene.remove(surfaceMesh);
+            }
+
+            // Obter configurações atuais
+            resolution = parseInt(document.getElementById('resolution').value);
+            amplitude = parseFloat(document.getElementById('amplitude').value);
+            frequency = parseFloat(document.getElementById('frequency').value);
+            const selectedFunction = document.getElementById('function-select').value;
+            const colorScheme = document.getElementById('color-scheme').value;
+
+            // Atualizar display da função
+            document.getElementById('function-display').textContent = `z = ${functionNames[selectedFunction]}`;
+
+            // Criar geometria
+            const geometry = new THREE.PlaneGeometry(size, size, resolution, resolution);
+            const position = geometry.attributes.position;
+            const colors = [];
+            let minZ = Infinity;
+            let maxZ = -Infinity;
+
+            // Calcular vértices e cores
+            for (let i = 0; i < position.count; i++) {
+                const x = position.getX(i);
+                const y = position.getY(i);
+                let z = functions[selectedFunction](x, y) * amplitude;
+                
+                position.setZ(i, z);
+                
+                // Atualizar min/max para normalização de cores
+                if (z < minZ) minZ = z;
+                if (z > maxZ) maxZ = z;
+            }
+
+            // Calcular cores baseadas no esquema selecionado
+            for (let i = 0; i < position.count; i++) {
+                const z = position.getZ(i);
+                const color = colorSchemes[colorScheme](z, minZ, maxZ);
+                colors.push(color.r, color.g, color.b);
+            }
+
+            // Atualizar normais para iluminação correta
+            geometry.computeVertexNormals();
+            
+            // Adicionar cores aos vértices
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            // Criar material
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                flatShading: false,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+
+            // Criar malha
+            surfaceMesh = new THREE.Mesh(geometry, material);
+            surfaceMesh.rotation.x = -Math.PI / 2; // Rotacionar para ficar horizontal
+            scene.add(surfaceMesh);
+
+            // Atualizar controles da câmera
+            controls.reset();
+            camera.position.set(0, 15, 20);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // 8. Event listeners
+        document.getElementById('function-select').addEventListener('change', createSurface);
+        document.getElementById('amplitude').addEventListener('input', createSurface);
+        document.getElementById('frequency').addEventListener('input', createSurface);
+        document.getElementById('resolution').addEventListener('input', createSurface);
+        document.getElementById('color-scheme').addEventListener('change', createSurface);
+        document.getElementById('reset-view').addEventListener('click', () => {
+            controls.reset();
+            camera.position.set(0, 15, 20);
+            camera.lookAt(0, 0, 0);
+        });
+
+        // 9. Redimensionamento
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 10. Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Iniciar
+        createSurface();
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 10 - Simulação Física</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        button, select, input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+        }
+        #stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Simulação Física</h2>
+        
+        <div class="control-group">
+            <button id="add-sphere">Adicionar Esfera</button>
+            <button id="reset-simulation">Resetar Simulação</button>
+        </div>
+
+        <div class="control-group">
+            <label>Gravidade: <input type="range" id="gravity" min="-20" max="20" step="0.1" value="-9.8"></label>
+            <label>Elasticidade: <input type="range" id="elasticity" min="0" max="1" step="0.01" value="0.7"></label>
+            <label>Atrito: <input type="range" id="friction" min="0" max="1" step="0.01" value="0.1"></label>
+        </div>
+
+        <div class="control-group">
+            <label>Modo de Câmera:
+                <select id="camera-mode">
+                    <option value="free">Livre</option>
+                    <option value="fixed">Fixa</option>
+                    <option value="follow">Seguir</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="control-group">
+            <button id="toggle-pause">Pausar Simulação</button>
+        </div>
+    </div>
+
+    <div id="stats">
+        Esferas: <span id="sphere-count">0</span><br>
+        FPS: <span id="fps-counter">0</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // 1. Configuração inicial
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Controles de câmera
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 3. Iluminação
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight2.position.set(-1, -1, -1);
+        scene.add(directionalLight2);
+
+        // 4. Variáveis globais
+        const spheres = [];
+        const floorSize = 30;
+        let gravity = -9.8;
+        let elasticity = 0.7;
+        let friction = 0.1;
+        let isPaused = false;
+        let lastTime = 0;
+        let fps = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+        let cameraMode = 'free';
+        let followedSphere = null;
+
+        // 5. Criar chão
+        const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x444444,
+            side: THREE.DoubleSide,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // 6. Criar paredes (opcional)
+        const wallHeight = 10;
+        const walls = [];
+        
+        function createWall(x, y, z, width, height, rotation) {
+            const wallGeometry = new THREE.BoxGeometry(width, height, 0.5);
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x555555,
+                transparent: true,
+                opacity: 0.7
+            });
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            wall.position.set(x, y, z);
+            wall.rotation.y = rotation;
+            scene.add(wall);
+            walls.push(wall);
+            return wall;
+        }
+
+        // Criar 4 paredes ao redor
+        createWall(0, wallHeight/2, -floorSize/2, floorSize, wallHeight, 0);
+        createWall(0, wallHeight/2, floorSize/2, floorSize, wallHeight, 0);
+        createWall(-floorSize/2, wallHeight/2, 0, floorSize, wallHeight, Math.PI/2);
+        createWall(floorSize/2, wallHeight/2, 0, floorSize, wallHeight, Math.PI/2);
+
+        // 7. Classe da Esfera Física
+        class PhysicsSphere {
+            constructor(x, y, z, radius = 1) {
+                this.radius = radius;
+                this.position = new THREE.Vector3(x, y, z);
+                this.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 5,
+                    0,
+                    (Math.random() - 0.5) * 5
+                );
+                this.acceleration = new THREE.Vector3(0, gravity, 0);
+                this.mesh = this.createMesh();
+                this.color = new THREE.Color(
+                    Math.random(),
+                    Math.random(),
+                    Math.random()
+                );
+                this.mesh.material.color = this.color;
+                scene.add(this.mesh);
+            }
+
+            createMesh() {
+                const geometry = new THREE.SphereGeometry(this.radius, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    roughness: 0.3,
+                    metalness: 0.2
+                });
+                return new THREE.Mesh(geometry, material);
+            }
+
+            update(deltaTime) {
+                // Aplicar aceleração (gravidade)
+                this.velocity.y += this.acceleration.y * deltaTime;
+                
+                // Atualizar posição
+                this.position.x += this.velocity.x * deltaTime;
+                this.position.y += this.velocity.y * deltaTime;
+                this.position.z += this.velocity.z * deltaTime;
+
+                // Atualizar mesh
+                this.mesh.position.copy(this.position);
+            }
+
+            checkCollisions(otherSpheres) {
+                // Colisão com o chão
+                if (this.position.y - this.radius < 0) {
+                    this.position.y = this.radius; // Corrigir posição
+                    this.velocity.y = -this.velocity.y * elasticity;
+                    this.velocity.x *= (1 - friction);
+                    this.velocity.z *= (1 - friction);
+                }
+
+                // Colisão com as paredes
+                const halfSize = floorSize / 2;
+                if (this.position.x - this.radius < -halfSize) {
+                    this.position.x = -halfSize + this.radius;
+                    this.velocity.x = -this.velocity.x * elasticity;
+                }
+                if (this.position.x + this.radius > halfSize) {
+                    this.position.x = halfSize - this.radius;
+                    this.velocity.x = -this.velocity.x * elasticity;
+                }
+                if (this.position.z - this.radius < -halfSize) {
+                    this.position.z = -halfSize + this.radius;
+                    this.velocity.z = -this.velocity.z * elasticity;
+                }
+                if (this.position.z + this.radius > halfSize) {
+                    this.position.z = halfSize - this.radius;
+                    this.velocity.z = -this.velocity.z * elasticity;
+                }
+
+                // Colisão entre esferas
+                for (const other of otherSpheres) {
+                    if (other === this) continue;
+
+                    const distance = this.position.distanceTo(other.position);
+                    const minDistance = this.radius + other.radius;
+
+                    if (distance < minDistance) {
+                        // Direção da colisão
+                        const collisionNormal = new THREE.Vector3()
+                            .subVectors(this.position, other.position)
+                            .normalize();
+
+                        // Corrigir posições (evitar sobreposição)
+                        const correction = (minDistance - distance) / 2;
+                        this.position.addScaledVector(collisionNormal, correction);
+                        other.position.addScaledVector(collisionNormal, -correction);
+
+                        // Calcular velocidades relativas
+                        const relativeVelocity = new THREE.Vector3()
+                            .subVectors(this.velocity, other.velocity);
+                        const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
+
+                        // Só colidir se estiverem se aproximando
+                        if (velocityAlongNormal > 0) continue;
+
+                        // Calcular impulso
+                        const restitution = elasticity;
+                        const j = -(1 + restitution) * velocityAlongNormal;
+                        const impulse = collisionNormal.clone().multiplyScalar(j);
+
+                        // Aplicar impulso
+                        this.velocity.add(impulse);
+                        other.velocity.sub(impulse);
+                    }
+                }
+            }
+        }
+
+        // 8. Adicionar esferas
+        function addSphere() {
+            const radius = 1 + Math.random() * 1;
+            const x = (Math.random() - 0.5) * 10;
+            const z = (Math.random() - 0.5) * 10;
+            const y = 10 + Math.random() * 10;
+            
+            const sphere = new PhysicsSphere(x, y, z, radius);
+            spheres.push(sphere);
+            updateSphereCount();
+        }
+
+        function resetSimulation() {
+            spheres.forEach(sphere => scene.remove(sphere.mesh));
+            spheres.length = 0;
+            updateSphereCount();
+        }
+
+        function updateSphereCount() {
+            document.getElementById('sphere-count').textContent = spheres.length;
+        }
+
+        // 9. Atualizar física
+        function updatePhysics(deltaTime) {
+            // Atualizar cada esfera
+            for (const sphere of spheres) {
+                sphere.update(deltaTime);
+            }
+
+            // Verificar colisões
+            for (const sphere of spheres) {
+                sphere.checkCollisions(spheres);
+            }
+        }
+
+        // 10. Controles da câmera
+        function updateCamera() {
+            if (cameraMode === 'fixed') {
+                camera.position.set(0, 15, 20);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+            } 
+            else if (cameraMode === 'follow' && spheres.length > 0) {
+                if (!followedSphere || !spheres.includes(followedSphere)) {
+                    followedSphere = spheres[0];
+                }
+                
+                const targetPosition = followedSphere.position.clone();
+                const offset = new THREE.Vector3(-5, 5, -5);
+                camera.position.copy(targetPosition).add(offset);
+                camera.lookAt(targetPosition);
+                controls.target.copy(targetPosition);
+            }
+            // 'free' mode usa os controles orbitais padrão
+        }
+
+        // 11. Event listeners
+        document.getElementById('add-sphere').addEventListener('click', addSphere);
+        document.getElementById('reset-simulation').addEventListener('click', resetSimulation);
+        document.getElementById('toggle-pause').addEventListener('click', () => {
+            isPaused = !isPaused;
+            document.getElementById('toggle-pause').textContent = 
+                isPaused ? 'Continuar Simulação' : 'Pausar Simulação';
+        });
+
+        document.getElementById('gravity').addEventListener('input', (e) => {
+            gravity = parseFloat(e.target.value);
+            spheres.forEach(sphere => {
+                sphere.acceleration.y = gravity;
+            });
+        });
+
+        document.getElementById('elasticity').addEventListener('input', (e) => {
+            elasticity = parseFloat(e.target.value);
+        });
+
+        document.getElementById('friction').addEventListener('input', (e) => {
+            friction = parseFloat(e.target.value);
+        });
+
+        document.getElementById('camera-mode').addEventListener('change', (e) => {
+            cameraMode = e.target.value;
+            if (cameraMode === 'follow' && spheres.length > 0) {
+                followedSphere = spheres[0];
+            }
+            updateCamera();
+        });
+
+        // 12. FPS counter
+        function updateFpsCounter(time) {
+            frameCount++;
+            if (time - lastFpsUpdate >= 1000) {
+                fps = Math.round((frameCount * 1000) / (time - lastFpsUpdate));
+                document.getElementById('fps-counter').textContent = fps;
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+        }
+
+        // 13. Redimensionamento
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 14. Animação
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            // Calcular deltaTime
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // em segundos
+            lastTime = currentTime;
+
+            // Atualizar FPS
+            updateFpsCounter(currentTime);
+
+            if (!isPaused) {
+                // Atualizar física
+                updatePhysics(deltaTime);
+                
+                // Atualizar câmera se estiver no modo follow
+                if (cameraMode === 'follow' && spheres.length > 0) {
+                    updateCamera();
+                }
+            }
+
+            // Atualizar controles orbitais
+            controls.update();
+
+            // Renderizar cena
+            renderer.render(scene, camera);
+        }
+
+        // Iniciar
+        camera.position.set(0, 15, 20);
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+        
+        // Adicionar algumas esferas iniciais
+        for (let i = 0; i < 3; i++) {
+            addSphere();
+        }
+
+        animate(0);
+    </script>
+</body>
+</html>

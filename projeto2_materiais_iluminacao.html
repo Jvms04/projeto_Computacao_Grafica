@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 2 - Materiais e Iluminação</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        input[type="range"], select {
+            width: 100%;
+        }
+        .color-picker {
+            display: flex;
+            align-items: center;
+        }
+        .color-picker input {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Galeria de Materiais e Iluminação</h2>
+        
+        <div class="control-group">
+            <h3>Materiais</h3>
+            <label>Tipo de Material:
+                <select id="materialType">
+                    <option value="standard">Standard</option>
+                    <option value="physical">Physical</option>
+                </select>
+            </label>
+            <label>Cor do Material:
+                <input type="color" id="materialColor" value="#ff0000">
+            </label>
+            <label>Metalicidade: <input type="range" id="metallic" min="0" max="1" step="0.01" value="0.5"></label>
+            <label>Rugosidade: <input type="range" id="roughness" min="0" max="1" step="0.01" value="0.5"></label>
+            <label>Refletividade: <input type="range" id="reflectivity" min="0" max="1" step="0.01" value="0.5" disabled></label>
+        </div>
+
+        <div class="control-group">
+            <h3>Luz Direcional</h3>
+            <label>Intensidade: <input type="range" id="directionalIntensity" min="0" max="2" step="0.1" value="1"></label>
+            <label class="color-picker">Cor:
+                <input type="color" id="directionalColor" value="#ffffff">
+            </label>
+            <label>Posição X: <input type="range" id="directionalX" min="-5" max="5" step="0.1" value="1"></label>
+            <label>Posição Y: <input type="range" id="directionalY" min="-5" max="5" step="0.1" value="1"></label>
+        </div>
+
+        <div class="control-group">
+            <h3>Luz Pontual</h3>
+            <label>Intensidade: <input type="range" id="pointIntensity" min="0" max="2" step="0.1" value="1"></label>
+            <label class="color-picker">Cor:
+                <input type="color" id="pointColor" value="#ffffff">
+            </label>
+            <label>Posição X: <input type="range" id="pointX" min="-5" max="5" step="0.1" value="2"></label>
+            <label>Posição Z: <input type="range" id="pointZ" min="-5" max="5" step="0.1" value="2"></label>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Cena, câmera e renderizador
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Luz Ambiente
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        // Luz Direcional (com sombras)
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(1, 1, 1);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        scene.add(directionalLight);
+
+        // Luz Pontual
+        const pointLight = new THREE.PointLight(0xffffff, 1, 10);
+        pointLight.position.set(2, 1, 2);
+        pointLight.castShadow = true;
+        scene.add(pointLight);
+
+        // Helper das luzes (para visualização)
+        const directionalLightHelper = new THREE.DirectionalLightHelper(directionalLight, 0.5);
+        scene.add(directionalLightHelper);
+        const pointLightHelper = new THREE.PointLightHelper(pointLight, 0.5);
+        scene.add(pointLightHelper);
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(10, 10);
+        scene.add(gridHelper);
+
+        // Esferas com materiais diferentes
+        const spheres = [];
+        const rows = 3;
+        const cols = 5;
+        const spacing = 1.5;
+
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                const sphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 32, 32),
+                    new THREE.MeshStandardMaterial({
+                        color: 0xff0000,
+                        metalness: 0.5,
+                        roughness: 0.5
+                    })
+                );
+                sphere.position.x = (j - (cols - 1) / 2) * spacing;
+                sphere.position.z = (i - (rows - 1) / 2) * spacing;
+                sphere.castShadow = true;
+                sphere.receiveShadow = true;
+                scene.add(sphere);
+                spheres.push(sphere);
+            }
+        }
+
+        // Posição da câmera
+        camera.position.set(0, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Controles
+        const materialType = document.getElementById('materialType');
+        const materialColor = document.getElementById('materialColor');
+        const metallic = document.getElementById('metallic');
+        const roughness = document.getElementById('roughness');
+        const reflectivity = document.getElementById('reflectivity');
+        
+        const directionalIntensity = document.getElementById('directionalIntensity');
+        const directionalColor = document.getElementById('directionalColor');
+        const directionalX = document.getElementById('directionalX');
+        const directionalY = document.getElementById('directionalY');
+        
+        const pointIntensity = document.getElementById('pointIntensity');
+        const pointColor = document.getElementById('pointColor');
+        const pointX = document.getElementById('pointX');
+        const pointZ = document.getElementById('pointZ');
+
+        // Atualiza materiais
+        const updateMaterials = () => {
+            const color = new THREE.Color(materialColor.value);
+            const isPhysical = materialType.value === 'physical';
+
+            spheres.forEach(sphere => {
+                if (isPhysical) {
+                    sphere.material = new THREE.MeshPhysicalMaterial({
+                        color: color,
+                        metalness: parseFloat(metallic.value),
+                        roughness: parseFloat(roughness.value),
+                        reflectivity: parseFloat(reflectivity.value),
+                        clearcoat: 0.5,
+                        clearcoatRoughness: 0.1
+                    });
+                } else {
+                    sphere.material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        metalness: parseFloat(metallic.value),
+                        roughness: parseFloat(roughness.value)
+                    });
+                }
+            });
+
+            reflectivity.disabled = !isPhysical;
+        };
+
+        // Atualiza luzes
+        const updateLights = () => {
+            directionalLight.intensity = parseFloat(directionalIntensity.value);
+            directionalLight.color.set(directionalColor.value);
+            directionalLight.position.x = parseFloat(directionalX.value);
+            directionalLight.position.y = parseFloat(directionalY.value);
+
+            pointLight.intensity = parseFloat(pointIntensity.value);
+            pointLight.color.set(pointColor.value);
+            pointLight.position.x = parseFloat(pointX.value);
+            pointLight.position.z = parseFloat(pointZ.value);
+        };
+
+        // Event listeners
+        materialType.addEventListener('change', updateMaterials);
+        materialColor.addEventListener('input', updateMaterials);
+        metallic.addEventListener('input', updateMaterials);
+        roughness.addEventListener('input', updateMaterials);
+        reflectivity.addEventListener('input', updateMaterials);
+
+        directionalIntensity.addEventListener('input', updateLights);
+        directionalColor.addEventListener('input', updateLights);
+        directionalX.addEventListener('input', updateLights);
+        directionalY.addEventListener('input', updateLights);
+
+        pointIntensity.addEventListener('input', updateLights);
+        pointColor.addEventListener('input', updateLights);
+        pointX.addEventListener('input', updateLights);
+        pointZ.addEventListener('input', updateLights);
+
+        // Inicializa
+        updateMaterials();
+        updateLights();
+
+        // Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+            directionalLightHelper.update();
+            pointLightHelper.update();
+        }
+        animate();
+
+        // Redimensionamento
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

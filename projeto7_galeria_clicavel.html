@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 7 - Galeria Clicável</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        #info-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+            display: none;
+        }
+        button {
+            padding: 8px;
+            margin: 5px 0;
+            width: 100%;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Galeria Clicável</h2>
+        <div class="control-group">
+            <p>Clique nos objetos para interagir</p>
+            <button id="resetScene">Resetar Cena</button>
+            <button id="toggleRotation">Pausar Rotação</button>
+        </div>
+    </div>
+
+    <div id="info-panel">
+        <h3 id="object-title">Objeto Selecionado</h3>
+        <p id="object-description">Descrição do objeto...</p>
+        <button id="close-info">Fechar</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // 1. Configuração inicial
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Controles de câmera
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 3. Iluminação
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight2.position.set(-1, -1, -1);
+        scene.add(directionalLight2);
+
+        // 4. Objetos interativos
+        const interactiveObjects = [];
+        const objectData = [
+            { 
+                type: 'painting', 
+                title: 'O Grito', 
+                description: 'Pintura expressionista de Edvard Munch (1893)',
+                color: 0xcc3333,
+                position: [-8, 2, 0],
+                rotation: [0, Math.PI/2, 0]
+            },
+            { 
+                type: 'painting', 
+                title: 'Mona Lisa', 
+                description: 'Retrato renascentista de Leonardo da Vinci (1503-1506)',
+                color: 0x33cc33,
+                position: [8, 2, 0],
+                rotation: [0, -Math.PI/2, 0]
+            },
+            { 
+                type: 'sculpture', 
+                title: 'O Pensador', 
+                description: 'Escultura em bronze de Auguste Rodin (1902)',
+                color: 0x3333cc,
+                position: [0, 1.5, -8],
+                rotation: [0, 0, 0]
+            },
+            { 
+                type: 'artifact', 
+                title: 'Vaso Grego', 
+                description: 'Vaso cerâmico da Grécia Antiga (séc. V a.C.)',
+                color: 0xcccc33,
+                position: [-5, 1, 5],
+                rotation: [0, Math.PI/4, 0]
+            },
+            { 
+                type: 'artifact', 
+                title: 'Máscara Egípcia', 
+                description: 'Máscara funerária do Antigo Egito',
+                color: 0xcc33cc,
+                position: [5, 1, 5],
+                rotation: [0, -Math.PI/4, 0]
+            }
+        ];
+
+        // 5. Criar objetos da galeria
+        function createGalleryObjects() {
+            // Limpar objetos existentes
+            interactiveObjects.forEach(obj => scene.remove(obj));
+            interactiveObjects.length = 0;
+
+            // Criar objetos baseados nos dados
+            objectData.forEach(data => {
+                let geometry, material;
+                
+                if (data.type === 'painting') {
+                    geometry = new THREE.BoxGeometry(5, 3, 0.1);
+                    material = new THREE.MeshPhongMaterial({ 
+                        color: data.color,
+                        emissive: data.color,
+                        emissiveIntensity: 0.1
+                    });
+                } else if (data.type === 'sculpture') {
+                    geometry = new THREE.SphereGeometry(1.5, 32, 32);
+                    material = new THREE.MeshPhongMaterial({ 
+                        color: data.color,
+                        shininess: 100
+                    });
+                } else {
+                    geometry = new THREE.CylinderGeometry(1, 1, 2, 16);
+                    material = new THREE.MeshPhongMaterial({ 
+                        color: data.color,
+                        wireframe: false
+                    });
+                }
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(...data.position);
+                mesh.rotation.set(...data.rotation);
+                
+                // Adicionar propriedades customizadas
+                mesh.userData = {
+                    title: data.title,
+                    description: data.description,
+                    type: data.type,
+                    originalColor: data.color,
+                    selected: false
+                };
+                
+                scene.add(mesh);
+                interactiveObjects.push(mesh);
+            });
+
+            // Criar chão
+            const floorGeometry = new THREE.PlaneGeometry(30, 30);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x888888,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -0.1;
+            scene.add(floor);
+        }
+
+        // 6. Raycaster para detecção de cliques
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onMouseClick(event) {
+            // Calcular posição normalizada do mouse
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            // Configurar raycaster
+            raycaster.setFromCamera(mouse, camera);
+
+            // Verificar interseções
+            const intersects = raycaster.intersectObjects(interactiveObjects);
+
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                
+                // Resetar cor de todos os objetos
+                interactiveObjects.forEach(obj => {
+                    obj.material.color.setHex(obj.userData.originalColor);
+                    obj.userData.selected = false;
+                });
+                
+                // Destacar objeto selecionado
+                object.material.color.setHex(0xffffff);
+                object.userData.selected = true;
+                
+                // Mostrar informações
+                showObjectInfo(object.userData);
+            } else {
+                // Esconder painel de informações se clicar no vazio
+                document.getElementById('info-panel').style.display = 'none';
+            }
+        }
+
+        // 7. Mostrar informações do objeto
+        function showObjectInfo(data) {
+            const infoPanel = document.getElementById('info-panel');
+            document.getElementById('object-title').textContent = data.title;
+            document.getElementById('object-description').textContent = data.description;
+            infoPanel.style.display = 'block';
+        }
+
+        // 8. Configuração inicial da cena
+        function init() {
+            createGalleryObjects();
+            
+            // Posicionar câmera
+            camera.position.set(0, 5, 15);
+            camera.lookAt(0, 0, 0);
+            
+            // Event listeners
+            window.addEventListener('click', onMouseClick, false);
+            window.addEventListener('resize', onWindowResize, false);
+            
+            document.getElementById('resetScene').addEventListener('click', () => {
+                createGalleryObjects();
+                document.getElementById('info-panel').style.display = 'none';
+            });
+            
+            document.getElementById('close-info').addEventListener('click', () => {
+                document.getElementById('info-panel').style.display = 'none';
+                interactiveObjects.forEach(obj => {
+                    if (obj.userData.selected) {
+                        obj.material.color.setHex(obj.userData.originalColor);
+                        obj.userData.selected = false;
+                    }
+                });
+            });
+            
+            let rotating = true;
+            document.getElementById('toggleRotation').addEventListener('click', () => {
+                rotating = !rotating;
+                document.getElementById('toggleRotation').textContent = 
+                    rotating ? 'Pausar Rotação' : 'Retomar Rotação';
+                
+                if (rotating) {
+                    animate();
+                }
+            });
+        }
+
+        // 9. Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Atualizar controles de câmera
+            controls.update();
+            
+            // Rotação dos objetos (se habilitado)
+            if (document.getElementById('toggleRotation').textContent === 'Pausar Rotação') {
+                interactiveObjects.forEach(obj => {
+                    if (obj.userData.type === 'sculpture') {
+                        obj.rotation.y += 0.01;
+                    }
+                });
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // 10. Redimensionamento
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Iniciar
+        init();
+        animate();
+    </script>
+</body>
+</html>

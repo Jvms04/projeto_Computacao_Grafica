@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 3 - Câmeras e Projeções</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        input[type="range"], select {
+            width: 100%;
+        }
+        #frustumHelper {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Visualização de Câmeras e Projeções</h2>
+        
+        <div class="control-group">
+            <label>Tipo de Câmera:
+                <select id="cameraType">
+                    <option value="perspective">Perspectiva</option>
+                    <option value="orthographic">Ortográfica</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="control-group" id="perspectiveControls">
+            <h3>Controles de Perspectiva</h3>
+            <label>FOV (Campo de Visão): <input type="range" id="fov" min="10" max="120" step="1" value="75"></label>
+            <label>Near Clipping: <input type="range" id="near" min="0.1" max="10" step="0.1" value="0.1"></label>
+            <label>Far Clipping: <input type="range" id="far" min="10" max="1000" step="10" value="1000"></label>
+        </div>
+
+        <div class="control-group" id="orthographicControls" style="display: none;">
+            <h3>Controles Ortográficos</h3>
+            <label>Tamanho: <input type="range" id="orthoSize" min="1" max="20" step="0.5" value="10"></label>
+        </div>
+
+        <div class="control-group">
+            <h3>Posição da Câmera</h3>
+            <label>X: <input type="range" id="posX" min="-20" max="20" step="0.5" value="5"></label>
+            <label>Y: <input type="range" id="posY" min="-20" max="20" step="0.5" value="5"></label>
+            <label>Z: <input type="range" id="posZ" min="-20" max="20" step="0.5" value="5"></label>
+        </div>
+
+        <div class="control-group">
+            <h3>Alvo (LookAt)</h3>
+            <label>X: <input type="range" id="targetX" min="-10" max="10" step="0.5" value="0"></label>
+            <label>Y: <input type="range" id="targetY" min="-10" max="10" step="0.5" value="0"></label>
+            <label>Z: <input type="range" id="targetZ" min="-10" max="10" step="0.5" value="0"></label>
+        </div>
+    </div>
+
+    <div id="frustumHelper">
+        <strong>Frustum da Câmera</strong>
+        <p>Área visível (clipping)</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Cena, câmeras e renderizador
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Câmera perspectiva (padrão)
+        const perspectiveCamera = new THREE.PerspectiveCamera(
+            75, // FOV
+            window.innerWidth / window.innerHeight,
+            0.1, // near
+            1000  // far
+        );
+        perspectiveCamera.position.set(5, 5, 5);
+
+        // Câmera ortográfica
+        const orthoSize = 10;
+        const orthographicCamera = new THREE.OrthographicCamera(
+            -orthoSize, orthoSize, orthoSize, -orthoSize,
+            0.1,
+            1000
+        );
+        orthographicCamera.position.set(5, 5, 5);
+        orthographicCamera.zoom = 1;
+
+        let activeCamera = perspectiveCamera;
+        activeCamera.lookAt(0, 0, 0);
+
+        // Objetos na cena
+        const objects = [];
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(20, 20);
+        scene.add(gridHelper);
+
+        // Eixos globais
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Adiciona objetos (cubos, esferas, etc.)
+        for (let i = 0; i < 5; i++) {
+            let geometry;
+            if (i % 3 === 0) geometry = new THREE.BoxGeometry(1, 1, 1);
+            else if (i % 3 === 1) geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            else geometry = new THREE.ConeGeometry(0.5, 1, 16);
+
+            const material = new THREE.MeshStandardMaterial({ 
+                color: colors[i],
+                metalness: 0.3,
+                roughness: 0.7
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.x = (i - 2) * 3;
+            mesh.position.z = (i % 2 === 0) ? 2 : -2;
+            scene.add(mesh);
+            objects.push(mesh);
+        }
+
+        // Luz para visualização dos objetos
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(1, 1, 1);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // Helper do Frustum (visualização semitransparente)
+        let frustumHelper;
+        const updateFrustumHelper = () => {
+            if (frustumHelper) scene.remove(frustumHelper);
+
+            if (activeCamera === perspectiveCamera) {
+                frustumHelper = new THREE.CameraHelper(perspectiveCamera);
+            } else {
+                frustumHelper = new THREE.CameraHelper(orthographicCamera);
+            }
+            frustumHelper.visible = true;
+            scene.add(frustumHelper);
+        };
+        updateFrustumHelper();
+
+        // Controles da UI
+        const cameraType = document.getElementById('cameraType');
+        const perspectiveControls = document.getElementById('perspectiveControls');
+        const orthographicControls = document.getElementById('orthographicControls');
+        const fov = document.getElementById('fov');
+        const near = document.getElementById('near');
+        const far = document.getElementById('far');
+        const orthoSizeControl = document.getElementById('orthoSize');
+        const posX = document.getElementById('posX');
+        const posY = document.getElementById('posY');
+        const posZ = document.getElementById('posZ');
+        const targetX = document.getElementById('targetX');
+        const targetY = document.getElementById('targetY');
+        const targetZ = document.getElementById('targetZ');
+
+        // Alternar entre câmeras
+        cameraType.addEventListener('change', (e) => {
+            if (e.target.value === 'perspective') {
+                activeCamera = perspectiveCamera;
+                perspectiveControls.style.display = 'block';
+                orthographicControls.style.display = 'none';
+            } else {
+                activeCamera = orthographicCamera;
+                perspectiveControls.style.display = 'none';
+                orthographicControls.style.display = 'block';
+            }
+            updateCamera();
+            updateFrustumHelper();
+        });
+
+        // Atualizar parâmetros da câmera
+        const updateCamera = () => {
+            const target = new THREE.Vector3(
+                parseFloat(targetX.value),
+                parseFloat(targetY.value),
+                parseFloat(targetZ.value)
+            );
+
+            activeCamera.position.set(
+                parseFloat(posX.value),
+                parseFloat(posY.value),
+                parseFloat(posZ.value)
+            );
+            activeCamera.lookAt(target);
+
+            if (activeCamera === perspectiveCamera) {
+                perspectiveCamera.fov = parseFloat(fov.value);
+                perspectiveCamera.near = parseFloat(near.value);
+                perspectiveCamera.far = parseFloat(far.value);
+                perspectiveCamera.updateProjectionMatrix();
+            } else {
+                const size = parseFloat(orthoSizeControl.value);
+                orthographicCamera.left = -size;
+                orthographicCamera.right = size;
+                orthographicCamera.top = size;
+                orthographicCamera.bottom = -size;
+                orthographicCamera.updateProjectionMatrix();
+            }
+
+            updateFrustumHelper();
+        };
+
+        // Event listeners para todos os controles
+        [fov, near, far, orthoSizeControl, posX, posY, posZ, targetX, targetY, targetZ].forEach(control => {
+            control.addEventListener('input', updateCamera);
+        });
+
+        // Redimensionamento
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            perspectiveCamera.aspect = aspect;
+            perspectiveCamera.updateProjectionMatrix();
+
+            orthographicCamera.left = -orthoSize * aspect;
+            orthographicCamera.right = orthoSize * aspect;
+            orthographicCamera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, activeCamera);
+        }
+        animate();
+    </script>
+</body>
+</html>

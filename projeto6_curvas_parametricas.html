@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto 6 - Curvas Paramétricas</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin: 5px 0;
+        }
+        button, select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+        }
+        .point-control {
+            display: flex;
+            justify-content: space-between;
+        }
+        .point-control input {
+            width: 30%;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Trilha com Curvas Paramétricas</h2>
+        
+        <div class="control-group">
+            <button id="toggleAnimation">Pausar Animação</button>
+            <button id="toggleFrenet">Mostrar Frame de Frenet</button>
+            <select id="curveType">
+                <option value="catmullrom">Catmull-Rom Spline</option>
+                <option value="bezier">Curva de Bézier</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <h3>Pontos de Controle</h3>
+            <div id="pointControls">
+                <!-- Gerado dinamicamente -->
+            </div>
+            <button id="addPoint">Adicionar Ponto</button>
+            <button id="resetPoints">Resetar Pontos</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 1. Cena, Câmera e Renderizador
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Variáveis globais
+        let curve, curveObject, movingObject, frenetFrame;
+        let points = [];
+        let isPlaying = true;
+        let showFrenet = false;
+        let currentCurveType = 'catmullrom';
+        let progress = 0;
+
+        // 3. Criar pontos iniciais
+        function createInitialPoints() {
+            return [
+                new THREE.Vector3(-10, 0, 0),
+                new THREE.Vector3(-5, 5, -5),
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(5, -5, 5),
+                new THREE.Vector3(10, 0, 0)
+            ];
+        }
+
+        // 4. Atualizar a curva
+        function updateCurve() {
+            // Remove objetos antigos
+            if (curveObject) scene.remove(curveObject);
+            if (movingObject) scene.remove(movingObject);
+            if (frenetFrame) scene.remove(frenetFrame);
+
+            // Cria a curva baseada no tipo selecionado
+            if (currentCurveType === 'catmullrom') {
+                curve = new THREE.CatmullRomCurve3(points, true);
+            } else {
+                // Para Bézier, usamos apenas 4 pontos (início, 2 controles, fim)
+                if (points.length < 4) {
+                    while (points.length < 4) {
+                        points.push(new THREE.Vector3(
+                            Math.random() * 10 - 5,
+                            Math.random() * 10 - 5,
+                            Math.random() * 10 - 5
+                        ));
+                    }
+                }
+                curve = new THREE.CubicBezierCurve3(
+                    points[0], points[1], points[2], points[3]
+                );
+            }
+
+            // Cria a visualização da curva
+            const curveGeometry = new THREE.BufferGeometry().setFromPoints(
+                curve.getPoints(200)
+            );
+            const curveMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff });
+            curveObject = new THREE.Line(curveGeometry, curveMaterial);
+            scene.add(curveObject);
+
+            // Cria o objeto que vai percorrer a curva
+            const objectGeometry = new THREE.ConeGeometry(0.5, 2, 16);
+            objectGeometry.rotateX(Math.PI / 2);
+            const objectMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+            movingObject = new THREE.Mesh(objectGeometry, objectMaterial);
+            scene.add(movingObject);
+
+            // Cria o frame de Frenet (tangente, normal, binormal)
+            const frenetGroup = new THREE.Group();
+            
+            // Tangente (vermelho)
+            const tangent = new THREE.ArrowHelper(
+                new THREE.Vector3(),
+                new THREE.Vector3(),
+                2,
+                0xff0000
+            );
+            frenetGroup.add(tangent);
+            
+            // Normal (verde)
+            const normal = new THREE.ArrowHelper(
+                new THREE.Vector3(),
+                new THREE.Vector3(),
+                1.5,
+                0x00ff00
+            );
+            frenetGroup.add(normal);
+            
+            // Binormal (azul)
+            const binormal = new THREE.ArrowHelper(
+                new THREE.Vector3(),
+                new THREE.Vector3(),
+                1.5,
+                0x0000ff
+            );
+            frenetGroup.add(binormal);
+            
+            frenetFrame = frenetGroup;
+            scene.add(frenetFrame);
+
+            // Atualiza a UI de pontos
+            updatePointControls();
+        }
+
+        // 5. Atualizar controles de pontos na UI
+        function updatePointControls() {
+            const container = document.getElementById('pointControls');
+            container.innerHTML = '';
+
+            points.forEach((point, index) => {
+                const pointDiv = document.createElement('div');
+                pointDiv.className = 'point-control';
+                pointDiv.innerHTML = `
+                    <label>Ponto ${index + 1}</label>
+                    <input type="number" class="point-x" value="${point.x.toFixed(2)}" step="0.1">
+                    <input type="number" class="point-y" value="${point.y.toFixed(2)}" step="0.1">
+                    <input type="number" class="point-z" value="${point.z.toFixed(2)}" step="0.1">
+                    <button class="remove-point" data-index="${index}">X</button>
+                `;
+                container.appendChild(pointDiv);
+
+                // Adiciona event listeners para os controles
+                const xInput = pointDiv.querySelector('.point-x');
+                const yInput = pointDiv.querySelector('.point-y');
+                const zInput = pointDiv.querySelector('.point-z');
+                
+                const updatePoint = () => {
+                    points[index].set(
+                        parseFloat(xInput.value),
+                        parseFloat(yInput.value),
+                        parseFloat(zInput.value)
+                    );
+                    updateCurve();
+                };
+
+                xInput.addEventListener('change', updatePoint);
+                yInput.addEventListener('change', updatePoint);
+                zInput.addEventListener('change', updatePoint);
+
+                // Botão para remover ponto
+                pointDiv.querySelector('.remove-point').addEventListener('click', (e) => {
+                    points.splice(index, 1);
+                    updateCurve();
+                });
+            });
+        }
+
+        // 6. Frame de Frenet (tangente, normal, binormal)
+        function updateFrenetFrame(position, tangent, normal, binormal) {
+            if (!frenetFrame) return;
+
+            // Atualiza a posição do frame
+            frenetFrame.position.copy(position);
+
+            // Atualiza as direções das setas
+            const tangentArrow = frenetFrame.children[0];
+            const normalArrow = frenetFrame.children[1];
+            const binormalArrow = frenetFrame.children[2];
+
+            tangentArrow.setDirection(tangent);
+            normalArrow.setDirection(normal);
+            binormalArrow.setDirection(binormal);
+
+            // Ajusta o comprimento das setas baseado na magnitude
+            tangentArrow.setLength(tangent.length() * 2);
+            normalArrow.setLength(normal.length() * 1.5);
+            binormalArrow.setLength(binormal.length() * 1.5);
+        }
+
+        // 7. Inicialização
+        function init() {
+            // Luz para visualização
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(1, 1, 1);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            // Grid helper
+            const gridHelper = new THREE.GridHelper(20, 20);
+            scene.add(gridHelper);
+
+            // Eixos globais
+            const axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+
+            // Pontos iniciais
+            points = createInitialPoints();
+            updateCurve();
+
+            // Posição da câmera
+            camera.position.set(0, 15, 20);
+            camera.lookAt(0, 0, 0);
+
+            // Controles
+            document.getElementById('toggleAnimation').addEventListener('click', () => {
+                isPlaying = !isPlaying;
+                document.getElementById('toggleAnimation').textContent = 
+                    isPlaying ? 'Pausar Animação' : 'Retomar Animação';
+            });
+
+            document.getElementById('toggleFrenet').addEventListener('click', () => {
+                showFrenet = !showFrenet;
+                frenetFrame.visible = showFrenet;
+                document.getElementById('toggleFrenet').textContent = 
+                    showFrenet ? 'Ocultar Frame de Frenet' : 'Mostrar Frame de Frenet';
+            });
+
+            document.getElementById('curveType').addEventListener('change', (e) => {
+                currentCurveType = e.target.value;
+                updateCurve();
+            });
+
+            document.getElementById('addPoint').addEventListener('click', () => {
+                const lastPoint = points[points.length - 1];
+                points.push(new THREE.Vector3(
+                    lastPoint.x + (Math.random() * 5 - 2.5),
+                    lastPoint.y + (Math.random() * 5 - 2.5),
+                    lastPoint.z + (Math.random() * 5 - 2.5)
+                ));
+                updateCurve();
+            });
+
+            document.getElementById('resetPoints').addEventListener('click', () => {
+                points = createInitialPoints();
+                updateCurve();
+            });
+        }
+
+        // 8. Animação
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isPlaying && curve) {
+                progress = (progress + 0.002) % 1;
+                
+                // Obtém a posição atual na curva
+                const point = curve.getPointAt(progress);
+                movingObject.position.copy(point);
+                
+                // Calcula a tangente (derivada primeira)
+                const tangent = curve.getTangentAt(progress).normalize();
+                
+                // Calcula a derivada segunda para obter a normal
+                const delta = 0.001;
+                const tangent1 = curve.getTangentAt(Math.max(progress - delta, 0));
+                const tangent2 = curve.getTangentAt(Math.min(progress + delta, 1));
+                const derivative2 = tangent2.clone().sub(tangent1).normalize();
+                
+                // Calcula a normal e binormal
+                const normal = derivative2.clone().sub(
+                    tangent.clone().multiplyScalar(derivative2.dot(tangent))
+                ).normalize();
+                
+                const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+                
+                // Atualiza a orientação do objeto
+                movingObject.lookAt(point.clone().add(tangent));
+                
+                // Atualiza o frame de Frenet
+                if (showFrenet) {
+                    updateFrenetFrame(point, tangent, normal, binormal);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // 9. Inicialização e loop
+        init();
+        animate();
+
+        // 10. Redimensionamento
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
